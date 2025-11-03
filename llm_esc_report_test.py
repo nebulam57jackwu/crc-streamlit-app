@@ -3,6 +3,7 @@ import pandas as pd
 import random
 import time
 import io
+from pathlib import Path  # 1. 匯入 pathlib
 
 # --- (從 Excel 載入資料的函數 - !! 修改錯誤訊息為英文 !!) ---
 @st.cache_data
@@ -33,8 +34,24 @@ def load_questions_from_excel(file_path):
         return []
 
 # --- 1. 載入資料 ---
-# (路徑使用您提供的絕對路徑)
-QUESTIONS_DB = load_questions_from_excel("/Users/JackWu/git_project/crc-streamlit-app/data/llm_cfs_report_questions.xlsx")
+from pathlib import Path  # 1. 匯入 pathlib
+
+# 2. 取得「目前這支 .py 檔案」所在的資料夾路徑
+SCRIPT_DIR = Path(__file__).parent
+
+# 3. 從該資料夾出發，去組合出您的 data 檔案的完整路徑
+#    (SCRIPT_DIR / "data" / "檔名.xlsx")
+DATA_FILE_PATH = SCRIPT_DIR / "data" / "llm_cfs_report_questions.xlsx"
+
+# 4. 使用這個組合出來的「絕對路徑」來讀取檔案
+try:
+    df = pd.read_excel(DATA_FILE_PATH)
+    # st.dataframe(df) # 接著做您想做的事
+except FileNotFoundError:
+    st.error(f"Error: File not found at {DATA_FILE_PATH}")
+    st.error("Please check if the file 'llm_cfs_report_questions.xlsx' exists in the 'data' folder of your GitHub repository.")
+
+QUESTIONS_DB = load_questions_from_excel(DATA_FILE_PATH)
 
 
 # --- (!! 翻譯 !!) 追蹤間隔選項 ---
