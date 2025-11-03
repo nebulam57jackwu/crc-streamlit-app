@@ -59,12 +59,13 @@ QUESTIONS_DB = load_questions_from_excel(DATA_FILE_PATH)
 # --- 追蹤間隔選項 (Follow-up Interval Options) ---
 FOLLOW_UP_OPTIONS = {
     "1y": "1 Year Follow-up",
-    "3y": "3 Year Follow-up",
-    "3-5y": "3-5 Year Follow-up",
-    "5y": "5 Year Follow-up",
-    "7-10y": "7-10 Year Follow-up",
-    "10y": "10 Year Follow-up",
-    "other": "Other"
+    "3y": "3 Years Follow-up",
+    "3-5y": "3-5 Years Follow-up",
+    "5y": "5 Years Follow-up",
+    "7-10y": "7-10 Years Follow-up",
+    "10y": "10 Years Follow-up",
+    "other": "Other",
+    "malignancy": "Malignancy found, immediate clinical evaluation recommended"
 }
 
 # ==============================================================================
