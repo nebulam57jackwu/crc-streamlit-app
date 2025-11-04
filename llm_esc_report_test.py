@@ -92,18 +92,34 @@ def initialize_experiment():
 
         # 1. 隨機將所有題目分為 A 組和 B 組
         all_questions = list(QUESTIONS_DB)
+
+        # --- 改為 40 題 (20+20) 並移除隨機 ---
+        TOTAL_QUESTIONS_TARGET = 40
+        SPLIT_POINT = TOTAL_QUESTIONS_TARGET // 2 # 20
         
-        # 確保有足夠的題目 (至少 50 題，否則調整大小)
-        if len(all_questions) < 50:
+        # 確保有足夠的題目
+        if len(all_questions) < TOTAL_QUESTIONS_TARGET:
             # 警告訊息
-            st.warning(f"Warning: Only {len(all_questions)} questions found in Excel file. Adjusting group sizes.")
-            split_point = len(all_questions) // 2
-            set_A = all_questions[:split_point]
-            set_B = all_questions[split_point:]
+            st.warning(f"Warning: Only {len(all_questions)} questions found in Excel file (less than {TOTAL_QUESTIONS_TARGET}). Adjusting group sizes based on file order.")
+            
+            # 如果題庫不夠，就地對分 (依照檔案順序)
+            actual_split_point = len(all_questions) // 2
+            
+            # *** 移除了 random.shuffle() ***
+            
+            set_A = all_questions[:actual_split_point]
+            set_B = all_questions[actual_split_point:]
         else:
-            random.shuffle(all_questions)
-            set_A = all_questions[:25]
-            set_B = all_questions[25:]
+            # 如果題庫充足，依照檔案順序選出 40 題，並分為 20 (A) / 20 (B)
+            
+            # *** 移除了 random.shuffle() ***
+            
+            # 從所有題目中選出目標數量的題目 (依照檔案順序)
+            selected_questions = all_questions[:TOTAL_QUESTIONS_TARGET]
+            
+            # 將選出的題目對半分
+            set_A = selected_questions[:SPLIT_POINT] # Excel 順序 0-19
+            set_B = selected_questions[SPLIT_POINT:] # Excel 順序 20-39
         
         # 2. 隨機將參與者分配到 G1 或 G2
         if 'participant_group' not in st.session_state.user_info:
@@ -113,6 +129,7 @@ def initialize_experiment():
         phase_1_questions = []
         phase_2_questions = []
         
+        # --- 交叉試驗邏輯 (Corrected Crossover Logic) ---
         if participant_group == 'G1':
             # G1: Phase 1 (Set A, No LLM), Phase 2 (Set B, With LLM)
             for q in set_A:
@@ -120,12 +137,12 @@ def initialize_experiment():
             for q in set_B:
                 new_q = q.copy(); new_q['show_llm'] = True; new_q['phase'] = 2; new_q['question_set'] = 'B'; phase_2_questions.append(new_q)
         else: # G2
-            # G2: Phase 1 (Set B, With LLM), Phase 2 (Set A, No LLM)
+            # G2: Phase 1 (Set B, No LLM), Phase 2 (Set A, With LLM) <--- 修正點
             for q in set_B:
-                new_q = q.copy(); new_q['show_llm'] = True; new_q['phase'] = 1; new_q['question_set'] = 'B'; phase_1_questions.append(new_q)
+                new_q = q.copy(); new_q['show_llm'] = False; new_q['phase'] = 1; new_q['question_set'] = 'B'; phase_1_questions.append(new_q) # <-- 修正: False
             for q in set_A:
-                new_q = q.copy(); new_q['show_llm'] = False; new_q['phase'] = 2; new_q['question_set'] = 'A'; phase_2_questions.append(new_q)
-        
+                new_q = q.copy(); new_q['show_llm'] = True; new_q['phase'] = 2; new_q['question_set'] = 'A'; phase_2_questions.append(new_q) # <-- 修正: True
+       
         # 3. 組合兩個階段的題目並儲存到 Session State
         st.session_state.questions = phase_1_questions + phase_2_questions
         
@@ -294,11 +311,10 @@ st.markdown("""
     padding: 15px;
     border-radius: 5px;
     border: 1px solid #91d5ff;
-    /* 讓內容能自動換行並顯示滾動條 */
+    /* 讓內容能自動換行 */
     white-space: pre-wrap; 
     overflow-wrap: break-word;
-    max-height: 300px; /* 限制高度 */
-    overflow-y: auto; /* 超出時顯示滾動條 */
+    /* --- 移除了 max-height 和 overflow-y --- */
     font-family: monospace; /* 可選：使用等寬字體讓報告更清晰 */
 }
 </style>
