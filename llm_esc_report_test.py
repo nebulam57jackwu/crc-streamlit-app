@@ -409,7 +409,7 @@ else:
             
         # 選擇追蹤間隔
         # 介面文字
-        st.subheader("Please select the follow-up interval:")
+        st.subheader("Please select the follow-up interval by 2020 USMSTF recommendation surveillance colonoscopy interval:")
         
         option_key = st.radio(
             "Follow-up Options", # 介面文字
