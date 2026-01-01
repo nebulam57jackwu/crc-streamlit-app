@@ -203,88 +203,139 @@ if app_mode.startswith("1."):
 elif app_mode.startswith("2."):
     st.title("🔬 Project 2: Image Annotation & Segmentation")
     
-    col_img, col_form = st.columns([1.5, 1])
+    col_img, col_form = st.columns([1.2, 1.8]) # 調整比例，讓右側表單寬一點以容納按鈕
     
     with col_img:
         st.markdown("##### 影像來源: Diagnosis_NBI / Frame_0052")
-        # 這裡未來接 Frame Extractor 產生的圖片
-        # 使用 streamlit-drawable-canvas 讓醫生畫 ROI
-        # 設置背景圖片
         bg_image_url = "https://via.placeholder.com/600x450.png?text=Lesion+Image+(NBI)"
         
         st.caption("請使用工具列畫出病灶範圍 (Polygon) 或 ROI (Rect)")
         canvas_result = st_canvas(
-            fill_color="rgba(255, 165, 0, 0.3)",  # 填充顏色
+            fill_color="rgba(255, 165, 0, 0.3)",
             stroke_width=2,
             stroke_color="#ff0000",
-            background_image=None, # 若有真實圖片，需用 PIL.Image 開啟放入這裡
             background_color="#eee",
             update_streamlit=True,
             height=450,
-            drawing_mode="polygon", # 預設多邊形
+            drawing_mode="polygon",
             key="canvas",
         )
-        
-        # 顯示 ROI JSON (Debug 用，實務上隱藏)
         if canvas_result.json_data is not None:
             roi_json_str = json.dumps(canvas_result.json_data)
-            st.caption(f"ROI Data Size: {len(roi_json_str)} bytes")
         else:
             roi_json_str = "{}"
 
     with col_form:
-        with st.form("img_anno_form"):
-            st.subheader("病理特徵標註")
+        with st.form("img_anno_form", border=True): # 加上 border 讓區塊更明顯
+            st.subheader("病理特徵標註 (Quick Click)")
             
-            lesion_id = st.text_input("Lesion ID", value=f"{st.session_state.case_id}_L1")
-            modality = st.selectbox("Modality", ["White Light", "NBI", "Indigo Carmine", "Crystal Violet"])
+            # 基本資訊
+            c_meta1, c_meta2 = st.columns(2)
+            with c_meta1:
+                lesion_id = st.text_input("Lesion ID", value=f"{st.session_state.case_id}_L1")
+            with c_meta2:
+                # Modality 選項少，用 Segmented Control 很適合
+                modality = st.segmented_control(
+                    "Modality", 
+                    ["White Light", "NBI", "Indigo", "Crystal Violet"],
+                    default="NBI",
+                    selection_mode="single"
+                )
             
-            # 動態顯示邏輯 (這裡用簡單邏輯，實際可用 JavaScript 或 callback 優化)
-            c1, c2 = st.columns(2)
-            with c1:
-                jnet = st.selectbox("JNET Class", JNET_OPTIONS, index=0)
-            with c2:
-                kudo = st.selectbox("Kudo Pit", KUDO_OPTIONS, index=0)
+            st.divider()
             
-            c3, c4 = st.columns(2)
-            with c3:
-                paris = st.selectbox("Paris Class", PARIS_OPTIONS)
-            with c4:
-                lst = st.selectbox("LST Subtype", LST_SUBTYPES)
+            # --- 核心分類 (使用 Pills 取代 Selectbox) ---
+            # JNET
+            st.markdown("**JNET Class**")
+            jnet = st.pills("JNET", JNET_OPTIONS, selection_mode="single", default=JNET_OPTIONS[0], key="pills_jnet")
             
-            depth = st.radio("Invasion Depth", DEPTH_OPTIONS, horizontal=True)
+            # --- 合併後的 Morphology (單選：Paris + LST) ---
+            st.markdown("**Lesion Morphology (Paris / LST)**")
             
-            st.markdown("---")
-            st.markdown("**品質與信心 (QC Metrics)**")
+            # 動態合併選項清單
+            morphology_opts = PARIS_OPTIONS + LST_SUBTYPES
+            
+            # 使用 pills 顯示單一選擇群組
+            morphology = st.pills(
+                "Morphology", 
+                morphology_opts, 
+                selection_mode="single", 
+                default=morphology_opts[0], # 預設選第一個
+                key="pills_morphology"
+            )
+            
+            st.markdown("**Invasion Depth**")
+            depth = st.segmented_control("Depth", DEPTH_OPTIONS, default=DEPTH_OPTIONS[0])
+            
+            st.divider()
+            
+            # --- 品質與信心 (QC Metrics) ---
             q1, q2 = st.columns(2)
-            quality = q1.select_slider("影像清晰度", options=["D (Blur)", "C", "B", "A (Clear)"], value="A (Clear)")
-            confidence = q2.select_slider("診斷確信度", options=["Low", "Medium", "High"], value="High")
+            with q1:
+                st.markdown("**影像清晰度**")
+                quality = st.select_slider("Quality", options=["D (Blur)", "C", "B", "A (Clear)"], value="A (Clear)", label_visibility="collapsed")
+            with q2:
+                st.markdown("**診斷確信度**")
+                confidence = st.segmented_control("Confidence", ["Low", "Medium", "High"], default="High", label_visibility="collapsed")
             
-            is_key = st.checkbox("🌟 收錄為圖譜 (Key Frame)")
-            teaching = st.text_area("Teaching Point", placeholder="血管紋理特徵...")
+            # 其他
+            st.markdown("")
+            c_check, c_text = st.columns([1, 3])
+            with c_check:
+                st.markdown("<br>", unsafe_allow_html=True) 
+                is_key = st.toggle("🌟 收錄為圖譜", value=False) 
+            with c_text:
+                teaching = st.text_input("Teaching Point", placeholder="血管紋理特徵...", help="用於教學圖譜的簡短說明")
             
-            if st.form_submit_button("✅ 提交標註 (Save to DB)"):
+            submit_btn = st.form_submit_button("✅ 提交標註 (Save)", type="primary", use_container_width=True)
+            
+            if submit_btn:
+                # 1. 取得基本變數 (防呆)
+                final_jnet = jnet if jnet else JNET_OPTIONS[0]
+                final_kudo = kudo if kudo else KUDO_OPTIONS[0]
+                final_modality = modality if modality else "NBI"
+                final_depth = depth if depth else "Unknown"
+                final_conf = confidence if confidence else "High"
+                
+                # 2. 處理 Morphology 分流邏輯 (關鍵修改)
+                selected_morph = morphology if morphology else "Unknown"
+                save_paris = "NA"
+                save_lst = "NA"
+
+                if selected_morph in LST_SUBTYPES:
+                    # 如果選的是 LST，自動填入 LST 欄位，Paris 設為關聯值
+                    save_lst = selected_morph
+                    save_paris = "0-IIa (LST)" 
+                else:
+                    # 如果選的是一般 Paris，LST 欄位設為 Non-LST
+                    save_paris = selected_morph
+                    save_lst = "Non-LST"
+
+                # 3. 建構資料字典
                 anno_data = {
                     "annotation_id": new_uuid(),
                     "case_id": st.session_state.case_id,
                     "lesion_id": lesion_id,
-                    "image_source_phase": "Diagnosis_NBI", # 範例
-                    "modality": modality,
-                    "jnet_class": jnet,
-                    "kudo_class": kudo,
-                    "paris_class": paris,
-                    "lst_subtype": lst,
-                    "invasion_depth": depth,
+                    "image_source_phase": "Diagnosis_NBI",
+                    "modality": final_modality,
+                    "jnet_class": final_jnet,
+                    "kudo_class": final_kudo,
+                    
+                    # 使用分流後的變數
+                    "paris_class": save_paris,
+                    "lst_subtype": save_lst,
+                    
+                    "invasion_depth": final_depth,
                     "roi_json": roi_json_str,
                     "quality_grade": quality,
-                    "confidence_level": confidence,
+                    "confidence_level": final_conf,
                     "is_keyframe": 1 if is_key else 0,
                     "teaching_point": teaching,
                     "annotator_id": st.session_state.user_id,
                     "created_at": datetime.now().isoformat()
                 }
                 save_annotation(anno_data)
-                st.success("標註已寫入資料庫！ROI 座標已儲存。")
+                st.success(f"已儲存: {final_jnet} | {selected_morph}")
 
 # --- PAGE 3: ATLAS DB ---
 else:
