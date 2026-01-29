@@ -5,3 +5,4 @@ numpy
 plotly
 fpdf2
 streamlit-drawable-canvas
+st-gsheets-connection
